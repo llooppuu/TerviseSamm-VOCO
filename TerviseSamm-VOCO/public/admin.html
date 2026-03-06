@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="et">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TerviseSamm – Haldus</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body class="theme-admin">
+  <header class="topbar">
+    <a href="admin.html" class="brand brand-link" aria-label="TerviseSamm haldus">
+      <img src="assets/logo/voco-horizontal-white.svg" alt="VOCO" class="brand-logo" />
+      <div>
+        <div class="brand-title">TerviseSamm</div>
+        <div class="brand-subtitle">Boss-õpetaja haldus</div>
+      </div>
+    </a>
+    <nav class="nav">
+      <a href="admin.html" class="is-active">Haldus</a>
+      <a href="teacher.html">Rühmad</a>
+    </nav>
+    <div class="right">
+      <span id="userName" class="muted topbar-user"></span>
+      <button id="logoutBtn" class="btn btn-ghost-light">Logi välja</button>
+    </div>
+  </header>
+
+  <main class="page-shell">
+    <section class="hero hero-admin">
+      <div class="hero-content">
+        <span class="eyebrow">VOCO haldus</span>
+        <h1>Ligipääsud ja rühmad</h1>
+        <p>Loo õpetajaid ja rühmi, halda aktiivsust, määra ligipääse ning lisa õpilasi rühmadesse.</p>
+      </div>
+      <div class="hero-badge-card">
+        <img src="assets/logo/voco-mark-white.svg" alt="VOCO logomärk" class="hero-mark" />
+        <div>
+          <div class="hero-badge-label">Audit ja haldus</div>
+          <div class="hero-badge-value">Selge ülevaade ühest kohast</div>
+        </div>
+      </div>
+    </section>
+
+    <div class="grid grid-main">
+      <section class="card card-full" id="adminNotice" hidden></section>
+
+      <section class="card card-full">
+        <div class="section-heading section-heading-actions">
+          <div>
+            <h2>Õpetajad</h2>
+            <p class="muted">Loo uusi õpetajaid, halda aktiivsust ja määra rühmade ligipääse.</p>
+          </div>
+          <button id="createTeacherBtn" class="btn btn-primary">Lisa õpetaja</button>
+        </div>
+        <div class="table-wrap">
+          <table class="table" id="teachersTable">
+            <thead><tr><th>Nimi</th><th>Kasutaja</th><th>Roll</th><th>Staatus</th><th>Ligipääsud</th><th>Tegevused</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card card-full">
+        <div class="section-heading section-heading-actions">
+          <div>
+            <h2>Rühmad</h2>
+            <p class="muted">Loo ja muuda rühmi, halda aktiivsust ning määra õpilasi.</p>
+          </div>
+          <button id="createGroupBtn" class="btn btn-primary">Lisa rühm</button>
+        </div>
+        <div class="table-wrap">
+          <table class="table" id="groupsTable">
+            <thead><tr><th>Kood</th><th>Nimi</th><th>Staatus</th><th>Õpilasi</th><th>Tegevused</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <div id="accessModal" class="modal" hidden>
+    <div class="modal-content modal-wide">
+      <div class="modal-head">
+        <div>
+          <h3>Õpetaja ligipääsud</h3>
+          <p id="accessTeacherName" class="muted"></p>
+        </div>
+        <button type="button" class="btn btn-icon" data-close="accessModal" aria-label="Sulge">×</button>
+      </div>
+      <div id="accessCheckboxes" class="checkbox-grid"></div>
+      <div class="form-actions form-actions-right">
+        <button id="accessModalClose" class="btn" type="button">Sulge</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="teacherModal" class="modal" hidden>
+    <div class="modal-content">
+      <div class="modal-head">
+        <div>
+          <h3>Lisa õpetaja</h3>
+          <p class="muted">Luuakse õpetaja konto ajutise parooliga.</p>
+        </div>
+        <button type="button" class="btn btn-icon" data-close="teacherModal" aria-label="Sulge">×</button>
+      </div>
+      <form id="teacherForm" class="form-grid">
+        <label>Nimi</label>
+        <input name="name" required />
+        <label>Kasutajanimi / e-mail</label>
+        <input name="username" type="email" required />
+        <label>Ajutine parool</label>
+        <input name="temp_password" type="password" required minlength="6" />
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">Loo õpetaja</button>
+          <button type="button" class="btn" data-close="teacherModal">Loobu</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="groupModal" class="modal" hidden>
+    <div class="modal-content">
+      <div class="modal-head">
+        <div>
+          <h3 id="groupModalTitle">Lisa rühm</h3>
+          <p class="muted">Rühma kood ja nimi õpilaste haldamiseks.</p>
+        </div>
+        <button type="button" class="btn btn-icon" data-close="groupModal" aria-label="Sulge">×</button>
+      </div>
+      <form id="groupForm" class="form-grid">
+        <input type="hidden" name="group_id" />
+        <label>Kood</label>
+        <input name="code" placeholder="ITA25" required />
+        <label>Nimi</label>
+        <input name="name" placeholder="ITA 2025" />
+        <div class="checkbox-inline">
+          <input type="checkbox" id="groupActive" name="is_active" checked />
+          <label for="groupActive">Rühm on aktiivne</label>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">Salvesta</button>
+          <button type="button" class="btn" data-close="groupModal">Loobu</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="groupStudentsModal" class="modal" hidden>
+    <div class="modal-content modal-wide">
+      <div class="modal-head">
+        <div>
+          <h3 id="groupStudentsTitle">Rühma õpilased</h3>
+          <p class="muted">Lisa või eemalda õpilasi selles rühmas.</p>
+        </div>
+        <button type="button" class="btn btn-icon" data-close="groupStudentsModal" aria-label="Sulge">×</button>
+      </div>
+      <div id="groupStudentsSelected" class="chip-list chip-list-large"></div>
+      <div id="groupStudentsCheckboxes" class="checkbox-grid"></div>
+      <div class="form-actions form-actions-right">
+        <button id="saveGroupStudentsBtn" class="btn btn-primary" type="button">Salvesta õpilased</button>
+        <button class="btn" type="button" data-close="groupStudentsModal">Sulge</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/admin.js"></script>
+</body>
+</html>
