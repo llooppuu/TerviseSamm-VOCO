@@ -6,15 +6,22 @@ if (user.role && user.role !== 'STUDENT') {
 let pushupsChart = null;
 let weightChart = null;
 let entriesCache = [];
+let activitiesCache = [];
+let activitySearchDebounce = null;
+
 
 document.addEventListener('DOMContentLoaded', async () => {
   const form = document.getElementById('entryForm');
   const editForm = document.getElementById('entryEditForm');
   const entryError = document.getElementById('entryError');
   const entryEditError = document.getElementById('entryEditError');
+  const activityFilterSelect = document.getElementById('activityFilterSelect');
+  const activitySearchInput = document.getElementById('activitySearch');
+  const entriesActivityHeader = document.getElementById('entriesActivityHeader');
 
   bindModalHelpers();
   setDefaultEntryDate();
+  await loadActivities();
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -22,7 +29,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const payload = readEntryForm(form, true);
     if (!hasAnyMetric(payload)) {
-      entryError.textContent = 'Vähemalt üks mõõdik peab olema täidetud.';
+      entryError.textContent = 'Täida vähemalt üks väli: tegevus, kaal, kätekõverdused või märkus.';
       entryError.hidden = false;
       return;
     }
@@ -50,7 +57,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const entryId = Number(editForm.entry_id.value || 0);
     const payload = readEntryForm(editForm, false);
     if (!hasAnyMetric(payload)) {
-      entryEditError.textContent = 'Vähemalt üks mõõdik peab olema täidetud.';
+      entryEditError.textContent = 'Täida vähemalt üks väli: tegevus, kaal, kätekõverdused või märkus.';
       entryEditError.hidden = false;
       return;
     }
@@ -70,8 +77,55 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
+  activityFilterSelect.addEventListener('change', async () => {
+    renderEntriesTable();
+    await initCharts();
+  });
+
+  activitySearchInput.addEventListener('input', () => {
+    window.clearTimeout(activitySearchDebounce);
+    activitySearchDebounce = window.setTimeout(async () => {
+      renderEntriesTable();
+      await initCharts();
+    }, 220);
+  });
+
+  entriesActivityHeader?.addEventListener('click', () => {
+    activitySearchInput?.focus();
+    activitySearchInput?.select();
+  });
+
   await refreshStudentView();
 });
+
+async function loadActivities() {
+  const data = await apiFetch('/api/activities');
+  activitiesCache = Array.isArray(data.activities) ? data.activities : [];
+
+  const selects = [
+    document.getElementById('entryActivitySelect'),
+    document.getElementById('entryEditActivitySelect'),
+    document.getElementById('activityFilterSelect'),
+  ];
+
+  selects.forEach((select, index) => {
+    if (!select) return;
+    const previous = select.value;
+    const defaultLabel = index === 2 ? 'Kõik tegevused' : '-- Vali tegevus --';
+    select.innerHTML = `<option value="">${defaultLabel}</option>`;
+
+    activitiesCache.forEach((activity) => {
+      const option = document.createElement('option');
+      option.value = String(activity.id);
+      option.textContent = activity.name;
+      select.appendChild(option);
+    });
+
+    if (previous && [...select.options].some((option) => option.value === previous)) {
+      select.value = previous;
+    }
+  });
+}
 
 async function refreshStudentView() {
   await loadEntries();
@@ -83,9 +137,11 @@ function readEntryForm(form, includeDate) {
   const weightInput = form.querySelector('[name="weight_kg"]');
   const pushupsInput = form.querySelector('[name="pushups"]');
   const noteInput = form.querySelector('[name="note"]');
+  const activityInput = form.querySelector('[name="activity_id"]');
 
   return {
     ...(includeDate ? { entry_date: dateValue } : {}),
+    activity_id: activityInput && activityInput.value !== '' ? parseInt(activityInput.value, 10) : null,
     weight_kg: weightInput.value === '' ? null : parseFloat(weightInput.value),
     pushups: pushupsInput.value === '' ? null : parseInt(pushupsInput.value, 10),
     note: noteInput.value.trim() || null,
@@ -93,7 +149,7 @@ function readEntryForm(form, includeDate) {
 }
 
 function hasAnyMetric(payload) {
-  return payload.weight_kg !== null || payload.pushups !== null || Boolean(payload.note);
+  return payload.activity_id !== null || payload.weight_kg !== null || payload.pushups !== null || Boolean(payload.note);
 }
 
 function setDefaultEntryDate() {
@@ -105,24 +161,42 @@ async function loadEntries() {
   const to = new Date();
   const from = new Date();
   from.setDate(from.getDate() - 90);
-  const fromStr = from.toISOString().slice(0, 10);
-  const toStr = to.toISOString().slice(0, 10);
 
-  const data = await apiFetch(`/api/student/entries?from=${fromStr}&to=${toStr}`);
+  const params = new URLSearchParams({
+    from: from.toISOString().slice(0, 10),
+    to: to.toISOString().slice(0, 10),
+  });
+
+  const data = await apiFetch(`/api/student/entries?${params.toString()}`);
   entriesCache = Array.isArray(data.entries) ? data.entries : [];
+  renderEntriesTable();
+}
 
+function getFilteredEntries() {
+  const activityFilter = document.getElementById('activityFilterSelect')?.value || '';
+  const activitySearch = (document.getElementById('activitySearch')?.value || '').trim().toLowerCase();
+  return entriesCache.filter((entry) => {
+    const byId = !activityFilter || String(entry.activity_id || '') === String(activityFilter);
+    const byText = !activitySearch || String(entry.activity_name || '').toLowerCase().includes(activitySearch);
+    return byId && byText;
+  });
+}
+
+function renderEntriesTable() {
   const tbody = document.querySelector('#entriesTable tbody');
   tbody.innerHTML = '';
+  const filtered = getFilteredEntries();
 
-  if (!entriesCache.length) {
-    tbody.innerHTML = '<tr><td colspan="5" class="muted">Sissekandeid veel ei ole.</td></tr>';
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="muted">Sissekandeid veel ei ole.</td></tr>';
     return;
   }
 
-  for (const entry of entriesCache) {
+  for (const entry of filtered) {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${escapeHtml(formatDate(entry.entry_date))}</td>
+      <td class="activity-cell">${escapeHtml(entry.activity_name || '–')}</td>
       <td>${escapeHtml(formatValue(entry.weight_kg))}</td>
       <td>${escapeHtml(formatValue(entry.pushups))}</td>
       <td>${escapeHtml(truncate(entry.note || '–', 56))}</td>
@@ -150,6 +224,17 @@ async function loadEntries() {
       }
     });
   });
+
+  tbody.querySelectorAll('td.activity-cell').forEach((cell) => {
+    cell.addEventListener('click', async () => {
+      const value = (cell.textContent || '').trim();
+      const input = document.getElementById('activitySearch');
+      if (!input || value === '–') return;
+      input.value = value;
+      renderEntriesTable();
+      await initCharts();
+    });
+  });
 }
 
 function openEditModal(entryId) {
@@ -164,6 +249,7 @@ function openEditModal(entryId) {
   form.weight_kg.value = entry.weight_kg ?? '';
   form.pushups.value = entry.pushups ?? '';
   form.note.value = entry.note ?? '';
+  form.activity_id.value = entry.activity_id ?? '';
   document.getElementById('entryModalDate').textContent = formatDate(entry.entry_date);
   openModal('entryModal');
 }
@@ -244,7 +330,7 @@ function formatValue(value) {
 }
 
 function truncate(value, limit) {
-  return value.length > limit ? `${value.slice(0, limit - 1)}…` : value;
+  return value.length > limit ? `${value.slice(0, limit - 1)}...` : value;
 }
 
 function escapeHtml(value) {
@@ -257,12 +343,14 @@ async function initCharts() {
   const pushupsCtx = document.getElementById('pushupsChart')?.getContext('2d');
   const weightCtx = document.getElementById('weightChart')?.getContext('2d');
 
-  const pushupsEntries = entriesCache
+  const filtered = getFilteredEntries();
+
+  const pushupsEntries = filtered
     .filter((entry) => entry.pushups !== null)
     .slice()
     .sort((a, b) => a.entry_date.localeCompare(b.entry_date));
 
-  const weightEntries = entriesCache
+  const weightEntries = filtered
     .filter((entry) => entry.weight_kg !== null)
     .slice()
     .sort((a, b) => a.entry_date.localeCompare(b.entry_date));
@@ -272,7 +360,7 @@ async function initCharts() {
     pushupsChart = createLineChart(pushupsCtx, {
       labels: pushupsEntries.map((entry) => formatDate(entry.entry_date)),
       values: pushupsEntries.map((entry) => entry.pushups),
-      label: 'Kätekõverdused',
+      label: 'Kordused',
       color: '#20C4F4',
     });
   }

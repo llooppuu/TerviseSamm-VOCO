@@ -1,14 +1,17 @@
 <!DOCTYPE html>
 <html lang="et">
+
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>TerviseSamm – Rühmad</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css" />
 </head>
+
 <body class="theme-teacher">
   <header class="topbar">
     <a href="teacher.html" class="brand brand-link" aria-label="TerviseSamm rühmad">
@@ -33,7 +36,8 @@
       <div class="hero-content">
         <span class="eyebrow">VOCO rühmade ülevaade</span>
         <h1>Rühmade areng</h1>
-        <p>Näe ainult neid rühmi, millele sul on ligipääs. Koondvaade aitab märgata osalust, keskmist taset ja muutust.</p>
+        <p>Näe ainult neid rühmi, millele sul on ligipääs. Koondvaade aitab märgata osalust, keskmist taset ja muutust.
+        </p>
       </div>
       <div class="hero-badge-card">
         <img src="assets/logo/voco-mark-white.svg" alt="VOCO logomärk" class="hero-mark" />
@@ -68,9 +72,18 @@
           </div>
         </div>
         <div class="kpis">
-          <div class="kpi"><div class="muted">Osalus (14p)</div><div id="kpiParticipation">–</div></div>
-          <div class="kpi"><div class="muted">Keskmine (viimane)</div><div id="kpiAvgLast">–</div></div>
-          <div class="kpi"><div class="muted">Muutus</div><div id="kpiDelta">–</div></div>
+          <div class="kpi">
+            <div class="muted">Osalus (14p)</div>
+            <div id="kpiParticipation">–</div>
+          </div>
+          <div class="kpi">
+            <div class="muted">Keskmine (viimane)</div>
+            <div id="kpiAvgLast">–</div>
+          </div>
+          <div class="kpi">
+            <div class="muted">Muutus</div>
+            <div id="kpiDelta">–</div>
+          </div>
         </div>
       </section>
 
@@ -81,9 +94,59 @@
             <p class="muted">Punane trend tähistab langust või rohkem kui 14 päeva kestnud puuduvat sissekannet.</p>
           </div>
         </div>
+        <div class="filter-row">
+          <div class="filter-control">
+            <label class="sr-only" for="studentActivitySearchInput">Otsi õpilaste tegevust</label>
+            <input id="studentActivitySearchInput" type="search" placeholder="Otsi õpilaste tegevust..." />
+          </div>
+        </div>
         <div class="table-wrap">
           <table class="table" id="studentsTable">
-            <thead><tr><th>Nimi</th><th>Viimane sissekanne</th><th>Kätekõverdused</th><th>Trend</th><th>Tegevused</th></tr></thead>
+            <thead>
+              <tr>
+                <th>Nimi</th>
+                <th>Viimane sissekanne</th>
+                <th id="studentsActivityHeader" class="clickable-header">Tegevus</th>
+                <th>Trend</th>
+                <th>Tegevused</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card card-full">
+        <div class="section-heading">
+          <div>
+            <h2>Tegevuste haldus</h2>
+          </div>
+        </div>
+        <form id="activityForm" class="form-grid">
+          <label for="activityName">Uue tegevuse nimi</label>
+          <input id="activityName" name="name" maxlength="100" placeholder="Nt Intervalljooks" required />
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Lisa tegevus</button>
+          </div>
+          <div id="activityFormError" class="error" hidden></div>
+        </form>
+
+        <div class="filter-row activity-search-row">
+          <div class="filter-control">
+            <label class="sr-only" for="activitySearchInput">Otsi tegevust</label>
+            <input id="activitySearchInput" type="search" placeholder="Otsi tegevust..." />
+          </div>
+        </div>
+
+        <div class="table-wrap activity-table-wrap">
+          <table class="table" id="activitiesTable">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th id="teacherActivitiesHeader" class="clickable-header">Tegevus</th>
+                <th>Tegevused</th>
+              </tr>
+            </thead>
             <tbody></tbody>
           </table>
         </div>
@@ -102,7 +165,14 @@
       </div>
       <div class="table-wrap compact-table-wrap">
         <table class="table compact-table" id="studentHistoryTable">
-          <thead><tr><th>Kuupäev</th><th>Kätekõverdused</th><th>Kaal</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Kuupäev</th>
+              <th>Tegevus</th>
+              <th>Kätekõverdused</th>
+              <th>Kaal</th>
+            </tr>
+          </thead>
           <tbody></tbody>
         </table>
       </div>
@@ -113,4 +183,5 @@
   <script src="js/auth.js"></script>
   <script src="js/teacher.js"></script>
 </body>
+
 </html>

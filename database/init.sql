@@ -1,4 +1,3 @@
--- TerviseSamm / Vormipäevik - andmebaasi initsialiseerimine
 -- MySQL 8.0+
 
 CREATE DATABASE IF NOT EXISTS vormipaevik
@@ -23,7 +22,6 @@ CREATE TABLE users (
   KEY idx_users_active (is_active)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- groups (plaan.md: name inimesele loetav)
 CREATE TABLE `groups` (
   id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
   code        VARCHAR(20) NOT NULL,
@@ -36,7 +34,7 @@ CREATE TABLE `groups` (
   KEY idx_groups_active (is_active)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- group_students
+
 CREATE TABLE group_students (
   group_id          INT UNSIGNED NOT NULL,
   student_user_id   INT UNSIGNED NOT NULL,
@@ -51,7 +49,6 @@ CREATE TABLE group_students (
     ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- teacher_group_access
 CREATE TABLE teacher_group_access (
   teacher_user_id     INT UNSIGNED NOT NULL,
   group_id            INT UNSIGNED NOT NULL,
@@ -71,10 +68,25 @@ CREATE TABLE teacher_group_access (
     ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- entries
+CREATE TABLE activities (
+  id                 INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  name               VARCHAR(100) NOT NULL,
+  created_by_user_id INT UNSIGNED NULL,
+  is_active          TINYINT(1) NOT NULL DEFAULT 1,
+  created_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_activities_name (name),
+  KEY idx_activities_active_name (is_active, name),
+  CONSTRAINT fk_activities_created_by
+    FOREIGN KEY (created_by_user_id) REFERENCES users(id)
+    ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE entries (
   id               INT UNSIGNED NOT NULL AUTO_INCREMENT,
   student_user_id  INT UNSIGNED NOT NULL,
+  activity_id      INT UNSIGNED NULL,
   entry_date       DATE NOT NULL,
   weight_kg        DECIMAL(5,2) NULL,
   pushups          INT NULL,
@@ -85,14 +97,17 @@ CREATE TABLE entries (
   UNIQUE KEY uq_entries_student_date (student_user_id, entry_date),
   KEY idx_entries_student_date (student_user_id, entry_date),
   KEY idx_entries_date (entry_date),
+  KEY idx_entries_activity_date (activity_id, entry_date),
   CONSTRAINT fk_entries_student
     FOREIGN KEY (student_user_id) REFERENCES users(id)
     ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT fk_entries_activity
+    FOREIGN KEY (activity_id) REFERENCES activities(id)
+    ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT chk_entries_pushups CHECK (pushups IS NULL OR (pushups >= 0 AND pushups <= 300)),
   CONSTRAINT chk_entries_weight CHECK (weight_kg IS NULL OR (weight_kg >= 20 AND weight_kg <= 300))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- ai_feedback
 CREATE TABLE ai_feedback (
   id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
   entry_id      INT UNSIGNED NOT NULL,
@@ -107,7 +122,6 @@ CREATE TABLE ai_feedback (
     ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- audit_log
 CREATE TABLE audit_log (
   id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   actor_user_id INT UNSIGNED NULL,
@@ -125,7 +139,6 @@ CREATE TABLE audit_log (
     ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- login_attempts (rate limit: 5 katset / 10 min)
 CREATE TABLE login_attempts (
   id         INT UNSIGNED NOT NULL AUTO_INCREMENT,
   ip         VARCHAR(45) NOT NULL,
@@ -135,7 +148,6 @@ CREATE TABLE login_attempts (
   KEY idx_login_attempts_ip_user (ip, username, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- teacher_notes (optional)
 CREATE TABLE teacher_notes (
   id               INT UNSIGNED NOT NULL AUTO_INCREMENT,
   teacher_user_id  INT UNSIGNED NOT NULL,
@@ -152,7 +164,12 @@ CREATE TABLE teacher_notes (
     ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Seed: rühmad
 INSERT INTO `groups` (code, name) VALUES
 ('ITA25', 'ITA 2025'),
 ('ITS25', 'ITS 2025');
+
+INSERT INTO activities (name, created_by_user_id) VALUES
+('Jooks', NULL),
+('Kõnd', NULL),
+('Rattasõit', NULL),
+('Jõutreening', NULL);

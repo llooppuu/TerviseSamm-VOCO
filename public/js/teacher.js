@@ -4,6 +4,11 @@ if (user.role && user.role !== 'TEACHER' && user.role !== 'ADMIN_TEACHER') {
 }
 
 const GROUP_STORAGE_KEY = 'teacherSelectedGroup';
+let activitySearchDebounce = null;
+let activitiesCache = [];
+let studentsCache = [];
+let studentActivitySearchDebounce = null;
+
 
 document.addEventListener('DOMContentLoaded', async () => {
   if (user.role === 'ADMIN_TEACHER') {
@@ -14,6 +19,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   bindModalHelpers();
 
   const groupSelect = document.getElementById('groupSelect');
+  const studentActivitySearchInput = document.getElementById('studentActivitySearchInput');
+  const studentsActivityHeader = document.getElementById('studentsActivityHeader');
   const groupsData = await apiFetch('/api/teacher/groups');
   const groups = Array.isArray(groupsData.groups) ? groupsData.groups : [];
 
@@ -36,7 +43,131 @@ document.addEventListener('DOMContentLoaded', async () => {
     sessionStorage.setItem(GROUP_STORAGE_KEY, code);
     await loadGroupOverview(code);
   });
+
+  studentActivitySearchInput?.addEventListener('input', () => {
+    window.clearTimeout(studentActivitySearchDebounce);
+    studentActivitySearchDebounce = window.setTimeout(() => {
+      renderStudentsTable();
+    }, 180);
+  });
+
+  studentsActivityHeader?.addEventListener('click', () => {
+    studentActivitySearchInput?.focus();
+    studentActivitySearchInput?.select();
+  });
+
+  try {
+    await initActivitySection();
+  } catch (err) {
+    const errorEl = document.getElementById('activityFormError');
+    if (errorEl) {
+      errorEl.textContent = err?.message || 'Tegevuste laadimine ebaõnnestus.';
+      errorEl.hidden = false;
+    }
+  }
 });
+
+async function initActivitySection() {
+  const form = document.getElementById('activityForm');
+  const errorEl = document.getElementById('activityFormError');
+  const searchInput = document.getElementById('activitySearchInput');
+  const nameInput = document.getElementById('activityName');
+  const teacherActivitiesHeader = document.getElementById('teacherActivitiesHeader');
+
+  await fetchActivities();
+  renderActivities(searchInput.value.trim());
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    errorEl.hidden = true;
+
+    const name = (nameInput?.value || '').trim();
+    if (!name) {
+      errorEl.textContent = 'Tegevuse nimi on kohustuslik.';
+      errorEl.hidden = false;
+      return;
+    }
+
+    try {
+      await apiFetch('/api/activities', {
+        method: 'POST',
+        body: JSON.stringify({ name }),
+      });
+      form.reset();
+      await fetchActivities();
+      renderActivities(searchInput.value.trim());
+    } catch (err) {
+      errorEl.textContent = err.message || 'Tegevuse lisamine ebaõnnestus.';
+      errorEl.hidden = false;
+    }
+  });
+
+  searchInput.addEventListener('input', () => {
+    window.clearTimeout(activitySearchDebounce);
+    activitySearchDebounce = window.setTimeout(() => {
+      renderActivities(searchInput.value.trim());
+    }, 220);
+  });
+
+  teacherActivitiesHeader?.addEventListener('click', () => {
+    searchInput?.focus();
+    searchInput?.select();
+  });
+}
+
+async function fetchActivities() {
+  const data = await apiFetch('/api/activities');
+  activitiesCache = Array.isArray(data.activities) ? data.activities : [];
+}
+
+function renderActivities(search) {
+  const query = (search || '').trim().toLowerCase();
+  const activities = activitiesCache.filter((activity) => !query || String(activity.name || '').toLowerCase().includes(query));
+  const tbody = document.querySelector('#activitiesTable tbody');
+  tbody.innerHTML = '';
+
+  if (!activities.length) {
+    tbody.innerHTML = '<tr><td colspan="3" class="muted">Tegevusi ei leitud.</td></tr>';
+    return;
+  }
+
+  activities.forEach((activity) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${activity.id}</td>
+      <td>${escapeHtml(activity.name)}</td>
+      <td>
+        <button type="button" class="btn btn-small btn-danger" data-activity-id="${activity.id}" data-activity-name="${escapeHtml(activity.name)}">
+          Kustuta
+        </button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  tbody.querySelectorAll('button[data-activity-id]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const id = Number(button.dataset.activityId || 0);
+      const name = button.dataset.activityName || 'tegevus';
+      if (id < 1) return;
+      const ok = window.confirm(`Kustuta tegevus "${name}"?`);
+      if (!ok) return;
+
+      try {
+        await apiFetch(`/api/activities/${id}`, { method: 'DELETE' });
+        const currentSearch = (document.getElementById('activitySearchInput')?.value || '').trim();
+        await fetchActivities();
+        renderActivities(currentSearch);
+      } catch (err) {
+        const errorEl = document.getElementById('activityFormError');
+        if (errorEl) {
+          errorEl.textContent = err.message || 'Tegevuse kustutamine ebaõnnestus.';
+          errorEl.hidden = false;
+        }
+      }
+    });
+  });
+}
 
 async function loadGroupOverview(code) {
   await Promise.all([
@@ -68,29 +199,40 @@ async function loadSummary(code) {
 }
 
 async function loadStudents(code) {
-  const tbody = document.querySelector('#studentsTable tbody');
-  tbody.innerHTML = '';
-
   if (!code) {
-    tbody.innerHTML = '<tr><td colspan="5" class="muted">Vali rühm, et näha õpilasi.</td></tr>';
+    studentsCache = [];
+    renderStudentsTable();
     return;
   }
 
   const data = await apiFetch(`/api/teacher/groups/${code}/students`);
-  const students = Array.isArray(data.students) ? data.students : [];
+  studentsCache = Array.isArray(data.students) ? data.students : [];
+  renderStudentsTable();
+}
 
-  if (!students.length) {
+function renderStudentsTable() {
+  const tbody = document.querySelector('#studentsTable tbody');
+  tbody.innerHTML = '';
+  const query = (document.getElementById('studentActivitySearchInput')?.value || '').trim().toLowerCase();
+
+  if (!studentsCache.length) {
     tbody.innerHTML = '<tr><td colspan="5" class="muted">Selles rühmas ei ole õpilasi.</td></tr>';
     return;
   }
 
-  students.forEach((student) => {
+  const filtered = studentsCache.filter((student) => !query || String(student.last_activity_name || '').toLowerCase().includes(query));
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="muted">Selle tegevuse järgi vasteid ei leitud.</td></tr>';
+    return;
+  }
+
+  filtered.forEach((student) => {
     const tr = document.createElement('tr');
     const badgeClass = student.trend_status === 'missing' ? 'red' : (student.trend_status || 'yellow');
     tr.innerHTML = `
       <td>${escapeHtml(student.name)}</td>
       <td>${student.last_entry_date ? escapeHtml(formatDate(student.last_entry_date)) : '–'}</td>
-      <td>${student.last_pushups ?? '–'}</td>
+      <td class="activity-cell">${escapeHtml(student.last_activity_name || '–')}</td>
       <td><span class="badge ${badgeClass}">${escapeHtml(statusLabel(student.trend_status))}</span></td>
       <td>
         <button type="button" class="btn btn-small" data-student-id="${student.student_id}" data-student-name="${escapeHtml(student.name)}">
@@ -106,6 +248,16 @@ async function loadStudents(code) {
       await openStudentHistory(button.dataset.studentId, button.dataset.studentName);
     });
   });
+
+  tbody.querySelectorAll('td.activity-cell').forEach((cell) => {
+    cell.addEventListener('click', () => {
+      const value = (cell.textContent || '').trim();
+      const input = document.getElementById('studentActivitySearchInput');
+      if (!input || value === '–') return;
+      input.value = value;
+      renderStudentsTable();
+    });
+  });
 }
 
 async function openStudentHistory(studentId, studentName) {
@@ -117,12 +269,13 @@ async function openStudentHistory(studentId, studentName) {
   document.getElementById('studentHistoryTitle').textContent = `${studentName} – lähiajalugu`;
 
   if (!entries.length) {
-    tbody.innerHTML = '<tr><td colspan="3" class="muted">Sissekanded puuduvad.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" class="muted">Sissekanded puuduvad.</td></tr>';
   } else {
     entries.forEach((entry) => {
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td>${escapeHtml(formatDate(entry.entry_date))}</td>
+        <td>${escapeHtml(entry.activity_name || '–')}</td>
         <td>${entry.pushups ?? '–'}</td>
         <td>${entry.weight_kg ?? '–'}</td>
       `;

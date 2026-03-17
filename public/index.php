@@ -20,10 +20,12 @@ use App\Repositories\AccessRepo;
 use App\Repositories\AuditRepo;
 use App\Repositories\FeedbackRepo;
 use App\Repositories\LoginAttemptRepo;
+use App\Repositories\ActivityRepo;
 use App\Controllers\AuthController;
 use App\Controllers\StudentController;
 use App\Controllers\TeacherController;
 use App\Controllers\AdminController;
+use App\Controllers\ActivityController;
 use App\Services\AiFeedbackService;
 use App\Services\TrendService;
 use App\Middleware\AuthMiddleware;
@@ -47,11 +49,13 @@ $groupRepo = new GroupRepo($pdo);
 $accessRepo = new AccessRepo($pdo);
 $feedbackRepo = new FeedbackRepo($pdo);
 $loginAttemptRepo = new LoginAttemptRepo($pdo);
+$activityRepo = new ActivityRepo($pdo);
 
 $authController = new AuthController($userRepo, $auditRepo, $accessRepo, $loginAttemptRepo);
-$studentController = new StudentController($entryRepo, $feedbackRepo, $auditRepo, new AiFeedbackService());
+$studentController = new StudentController($entryRepo, $feedbackRepo, $auditRepo, $activityRepo, new AiFeedbackService());
 $teacherController = new TeacherController($accessRepo, $groupRepo, $entryRepo, $userRepo, new TrendService());
 $adminController = new AdminController($userRepo, $groupRepo, $accessRepo, $auditRepo, $pdo);
+$activityController = new ActivityController($activityRepo, $auditRepo);
 
 $loginAttemptRepo->clearOldAttempts();
 
@@ -95,6 +99,24 @@ try {
             AuthMiddleware::requireLogin();
             RoleMiddleware::requireRole(['STUDENT']);
             $studentController->getFeedback((int)$m[1]);
+        }
+    }
+
+    if ($method === 'GET' && $path === '/api/activities') {
+        AuthMiddleware::requireLogin();
+        RoleMiddleware::requireRole(['STUDENT', 'TEACHER', 'ADMIN_TEACHER']);
+        $activityController->listActivities();
+    }
+    if ($method === 'POST' && $path === '/api/activities') {
+        AuthMiddleware::requireLogin();
+        RoleMiddleware::requireRole(['TEACHER', 'ADMIN_TEACHER']);
+        $activityController->createActivity();
+    }
+    if (preg_match('#^/api/activities/(\d+)$#', $path, $m)) {
+        if ($method === 'DELETE') {
+            AuthMiddleware::requireLogin();
+            RoleMiddleware::requireRole(['TEACHER', 'ADMIN_TEACHER']);
+            $activityController->deleteActivity((int)$m[1]);
         }
     }
 

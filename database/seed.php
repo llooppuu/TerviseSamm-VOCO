@@ -7,6 +7,46 @@
 
 declare(strict_types=1);
 
+function loadEnvFile(string $path): void
+{
+    if (!is_file($path) || !is_readable($path)) {
+        return;
+    }
+
+    $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    if ($lines === false) {
+        return;
+    }
+
+    foreach ($lines as $line) {
+        $line = trim($line);
+        if ($line === '' || str_starts_with($line, '#')) {
+            continue;
+        }
+
+        [$key, $value] = array_pad(explode('=', $line, 2), 2, '');
+        $key = trim($key);
+        $value = trim($value);
+        if ($key === '' || getenv($key) !== false) {
+            continue;
+        }
+
+        if (
+            (str_starts_with($value, '"') && str_ends_with($value, '"')) ||
+            (str_starts_with($value, "'") && str_ends_with($value, "'"))
+        ) {
+            $value = substr($value, 1, -1);
+        }
+
+        putenv("{$key}={$value}");
+        $_ENV[$key] = $value;
+        $_SERVER[$key] = $value;
+    }
+}
+
+$rootDir = dirname(__DIR__);
+loadEnvFile($rootDir . '/config/.env');
+
 $pass = 'secret';
 $hash = password_hash($pass, PASSWORD_DEFAULT);
 
@@ -38,7 +78,6 @@ try {
         echo "OK: {$username} ({$role})\n";
     }
 
-    // Kontrolli kas õpilane on rühmas, lisa vajadusel
     $studentId = $pdo->query("SELECT id FROM users WHERE username = 'jyri@school.ee'")->fetchColumn();
     $groupIds = $pdo->query("SELECT id FROM `groups` WHERE code IN ('ITA25','ITS25')")->fetchAll(PDO::FETCH_COLUMN);
     $adminId = $pdo->query("SELECT id FROM users WHERE role = 'ADMIN_TEACHER' LIMIT 1")->fetchColumn();
@@ -60,7 +99,12 @@ try {
 
     echo "\nSeed valmis.\n";
 } catch (PDOException $e) {
-    echo "Viga: " . $e->getMessage() . "\n";
-    echo "Enne seedit käivita: mysql -u root < database/init.sql\n";
+    $msg = $e->getMessage();
+    echo "Viga: {$msg}\n";
+    if (stripos($msg, 'could not find driver') !== false) {
+        echo "Puudub PDO MySQL driver (pdo_mysql).\n";
+        echo "Debian/Ubuntu: sudo apt install php-mysql\n";
+    }
+    echo "Enne seedit käivita: mysql -u root -p < database/init.sql\n";
     exit(1);
 }

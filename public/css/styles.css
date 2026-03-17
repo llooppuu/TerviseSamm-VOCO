@@ -300,6 +300,8 @@ h1, h2, h3 {
 .filter-control {
   min-width: min(100%, 340px);
 }
+.activity-search-row { margin-top: 16px; }
+.activity-table-wrap { margin-top: 14px; }
 
 .kpis {
   display: grid;
@@ -468,6 +470,12 @@ input:focus, select:focus, textarea:focus {
   color: var(--color-muted);
   letter-spacing: 0.06em;
   text-transform: uppercase;
+}
+.table thead th.clickable-header {
+  cursor: pointer;
+}
+.table thead th.clickable-header:hover {
+  text-decoration: underline;
 }
 .table tbody td {
   padding: 15px 14px;

@@ -10,6 +10,7 @@ use App\Repositories\UserRepo;
 use App\Services\TrendService;
 use App\Utils\Response;
 use App\Utils\Security;
+use App\Utils\Text;
 
 final class TeacherController
 {
@@ -145,6 +146,7 @@ final class TeacherController
 
             $lastDate = $last['entry_date'] ?? null;
             $lastPushups = $last && $last['pushups'] !== null ? (int)$last['pushups'] : null;
+            $lastActivityName = $last && $last['activity_name'] !== null ? Text::normalizeUtf8((string)$last['activity_name']) : null;
             $prevPushups = $prev && $prev['pushups'] !== null ? (int)$prev['pushups'] : null;
 
             $trendStatus = $this->trend->getTrendStatus($lastDate, $lastPushups, $prevPushups, $today);
@@ -153,7 +155,7 @@ final class TeacherController
                 'student_id' => (int)$user['id'],
                 'name' => (string)$user['name'],
                 'last_entry_date' => $lastDate,
-                'last_pushups' => $lastPushups,
+                'last_activity_name' => $lastActivityName,
                 'trend_status' => $trendStatus,
             ];
         }
@@ -200,6 +202,7 @@ final class TeacherController
             'entry_date' => $r['entry_date'],
             'pushups' => $r['pushups'] !== null ? (int)$r['pushups'] : null,
             'weight_kg' => $r['weight_kg'] !== null ? (float)$r['weight_kg'] : null,
+            'activity_name' => $r['activity_name'] !== null ? Text::normalizeUtf8((string)$r['activity_name']) : null,
         ], $rows);
 
         Response::json([

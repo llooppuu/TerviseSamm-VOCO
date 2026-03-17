@@ -6,9 +6,11 @@ namespace App\Controllers;
 use App\Repositories\EntryRepo;
 use App\Repositories\FeedbackRepo;
 use App\Repositories\AuditRepo;
+use App\Repositories\ActivityRepo;
 use App\Services\AiFeedbackService;
 use App\Utils\Response;
 use App\Utils\Security;
+use App\Utils\Text;
 
 final class StudentController
 {
@@ -16,6 +18,7 @@ final class StudentController
         private EntryRepo $entries,
         private FeedbackRepo $feedback,
         private AuditRepo $audit,
+        private ActivityRepo $activities,
         private AiFeedbackService $aiFeedback
     ) {}
 
@@ -27,18 +30,27 @@ final class StudentController
 
         $from = $_GET['from'] ?? date('Y-m-d', strtotime('-90 days'));
         $to = $_GET['to'] ?? date('Y-m-d');
+        $activityId = isset($_GET['activity_id']) && $_GET['activity_id'] !== ''
+            ? (int)$_GET['activity_id']
+            : null;
+        $activitySearch = trim((string)($_GET['activity_search'] ?? ''));
 
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $from) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $to)) {
             Response::error('VALIDATION_ERROR', 'Kuupäev peab olema YYYY-MM-DD', 400);
         }
+        if ($activityId !== null && $activityId < 1) {
+            Response::error('VALIDATION_ERROR', 'activity_id peab olema positiivne arv', 400);
+        }
 
-        $rows = $this->entries->listForStudent((int)$studentId, (string)$from, (string)$to);
+        $rows = $this->entries->listForStudent((int)$studentId, (string)$from, (string)$to, $activityId, $activitySearch);
         $mapped = array_map(fn(array $r) => [
             'id' => (int)$r['id'],
             'entry_date' => $r['entry_date'],
             'weight_kg' => $r['weight_kg'] !== null ? (float)$r['weight_kg'] : null,
             'pushups' => $r['pushups'] !== null ? (int)$r['pushups'] : null,
             'note' => $r['note'],
+            'activity_id' => $r['activity_id'] !== null ? (int)$r['activity_id'] : null,
+            'activity_name' => $r['activity_name'] !== null ? Text::normalizeUtf8((string)$r['activity_name']) : null,
             'feedback' => $r['feedback_text'] ? ['text' => $r['feedback_text']] : null,
         ], $rows);
 
@@ -56,6 +68,9 @@ final class StudentController
         $weightKg = isset($data['weight_kg']) ? (float)$data['weight_kg'] : null;
         $pushups = array_key_exists('pushups', $data) && $data['pushups'] !== null ? (int)$data['pushups'] : null;
         $note = isset($data['note']) ? trim((string)$data['note']) : null;
+        $activityId = array_key_exists('activity_id', $data)
+            ? ($data['activity_id'] === null || $data['activity_id'] === '' ? null : (int)$data['activity_id'])
+            : null;
 
         if ($entryDate === '') $entryDate = date('Y-m-d');
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $entryDate)) {
@@ -63,8 +78,11 @@ final class StudentController
         }
 
         if ($weightKg === 0.0) $weightKg = null;
-        if ($pushups === null && $weightKg === null && ($note === null || $note === '')) {
-            Response::error('VALIDATION_ERROR', 'Vähemalt üks mõõdik (kaal, kätekõverdused või märkus) peab olema täidetud', 400);
+        if ($pushups === null && $weightKg === null && ($note === null || $note === '') && $activityId === null) {
+            Response::error('VALIDATION_ERROR', 'Täida vähemalt üks väli: tegevus, kaal, kätekõverdused või märkus', 400);
+        }
+        if ($activityId !== null && $activityId < 1) {
+            Response::error('VALIDATION_ERROR', 'activity_id peab olema positiivne arv', 400);
         }
 
         if ($pushups !== null && ($pushups < 0 || $pushups > 300)) {
@@ -76,12 +94,15 @@ final class StudentController
         if ($note !== null && (function_exists('mb_strlen') ? mb_strlen($note) : strlen($note)) > 300) {
             Response::error('VALIDATION_ERROR', 'Märkus max 300 tähemärki', 400);
         }
+        if ($activityId !== null && !$this->activities->findActiveById($activityId)) {
+            Response::error('VALIDATION_ERROR', 'Valitud tegevust ei leitud', 400);
+        }
 
         if ($this->entries->existsForDate((int)$studentId, $entryDate)) {
             Response::error('DUPLICATE_ENTRY_DATE', 'Selle kuupäeva sissekanne on juba olemas.', 409);
         }
 
-        $entryId = $this->entries->create((int)$studentId, $entryDate, $weightKg, $pushups, $note);
+        $entryId = $this->entries->create((int)$studentId, $entryDate, $weightKg, $pushups, $note, $activityId);
         $this->audit->log((int)$studentId, 'ENTRY_CREATE', 'entry', $entryId);
 
         $feedbackText = $this->generateFeedbackForEntry((int)$studentId, $entryId, $entryDate, $pushups, $weightKg);
@@ -93,6 +114,8 @@ final class StudentController
             'weight_kg' => $weightKg,
             'pushups' => $pushups,
             'note' => $note,
+            'activity_id' => $activityId,
+            'activity_name' => $activityId !== null ? Text::normalizeUtf8((string)($this->activities->findActiveById($activityId)['name'] ?? '')) : null,
         ];
 
         Response::json([
@@ -116,11 +139,14 @@ final class StudentController
         $weightKg = array_key_exists('weight_kg', $data) ? ($data['weight_kg'] === null ? null : (float)$data['weight_kg']) : ($entry['weight_kg'] !== null ? (float)$entry['weight_kg'] : null);
         $pushups = array_key_exists('pushups', $data) ? ($data['pushups'] === null ? null : (int)$data['pushups']) : ($entry['pushups'] !== null ? (int)$entry['pushups'] : null);
         $note = array_key_exists('note', $data) ? ($data['note'] === null ? null : trim((string)$data['note'])) : $entry['note'];
+        $activityId = array_key_exists('activity_id', $data)
+            ? ($data['activity_id'] === null || $data['activity_id'] === '' ? null : (int)$data['activity_id'])
+            : ($entry['activity_id'] !== null ? (int)$entry['activity_id'] : null);
         $entryDate = (string)$entry['entry_date'];
 
         if ($weightKg === 0.0) $weightKg = null;
-        if ($pushups === null && $weightKg === null && ($note === null || $note === '')) {
-            Response::error('VALIDATION_ERROR', 'Vähemalt üks mõõdik peab olema täidetud', 400);
+        if ($pushups === null && $weightKg === null && ($note === null || $note === '') && $activityId === null) {
+            Response::error('VALIDATION_ERROR', 'Täida vähemalt üks väli: tegevus, kaal, kätekõverdused või märkus', 400);
         }
         if ($pushups !== null && ($pushups < 0 || $pushups > 300)) {
             Response::error('VALIDATION_ERROR', 'Kätekõverdused peavad olema 0–300', 400);
@@ -131,8 +157,14 @@ final class StudentController
         if ($note !== null && (function_exists('mb_strlen') ? mb_strlen($note) : strlen($note)) > 300) {
             Response::error('VALIDATION_ERROR', 'Märkus max 300 tähemärki', 400);
         }
+        if ($activityId !== null && $activityId < 1) {
+            Response::error('VALIDATION_ERROR', 'activity_id peab olema positiivne arv', 400);
+        }
+        if ($activityId !== null && !$this->activities->findActiveById($activityId)) {
+            Response::error('VALIDATION_ERROR', 'Valitud tegevust ei leitud', 400);
+        }
 
-        $this->entries->update($id, $weightKg, $pushups, $note);
+        $this->entries->update($id, $weightKg, $pushups, $note, $activityId);
         $this->audit->log((int)$studentId, 'ENTRY_UPDATE', 'entry', $id);
 
         $feedbackText = $this->generateFeedbackForEntry((int)$studentId, $id, $entryDate, $pushups, $weightKg);
@@ -147,6 +179,8 @@ final class StudentController
                 'weight_kg' => $updated['weight_kg'] !== null ? (float)$updated['weight_kg'] : null,
                 'pushups' => $updated['pushups'] !== null ? (int)$updated['pushups'] : null,
                 'note' => $updated['note'],
+                'activity_id' => $updated['activity_id'] !== null ? (int)$updated['activity_id'] : null,
+                'activity_name' => $updated['activity_name'] !== null ? Text::normalizeUtf8((string)$updated['activity_name']) : null,
             ],
             'feedback' => ['provider' => 'openai', 'model' => 'gpt-4o-mini', 'text' => $feedbackText],
         ], 200);

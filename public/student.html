@@ -57,10 +57,15 @@
           <label>Kuupäev</label>
           <input type="date" name="entry_date" required />
 
+          <label>Tegevus <span class="muted">(valikuline)</span></label>
+          <select name="activity_id" id="entryActivitySelect">
+            <option value="">-- Vali tegevus --</option>
+          </select>
+
           <label>Kaal (kg) <span class="muted">(valikuline)</span></label>
           <input type="number" name="weight_kg" step="0.1" min="20" max="300" />
 
-          <label>Kätekõverdused <span class="muted">(valikuline)</span></label>
+          <label>Kordused <span class="muted">(valikuline)</span></label>
           <input type="number" name="pushups" min="0" max="300" />
 
           <label>Märkus <span class="muted">(valikuline)</span></label>
@@ -92,7 +97,7 @@
         </div>
         <div class="charts-grid">
           <div class="chart-panel">
-            <h3>Kätekõverdused</h3>
+            <h3>Kordused</h3>
             <div class="chart-container">
               <canvas id="pushupsChart" height="160"></canvas>
             </div>
@@ -113,10 +118,22 @@
             <p class="muted">Saad oma sissekandeid vaadata, muuta ja kustutada.</p>
           </div>
         </div>
+        <div class="filter-row">
+          <div class="filter-control">
+            <label class="sr-only" for="activityFilterSelect">Filtreeri tegevuse järgi</label>
+            <select id="activityFilterSelect">
+              <option value="">Kõik tegevused</option>
+            </select>
+          </div>
+          <div class="filter-control">
+            <label class="sr-only" for="activitySearch">Otsi tegevust</label>
+            <input id="activitySearch" type="search" placeholder="Otsi tegevust nime järgi..." />
+          </div>
+        </div>
         <div class="table-wrap">
           <table class="table" id="entriesTable">
             <thead>
-              <tr><th>Kuupäev</th><th>Kaal</th><th>Kätekõverdused</th><th>Märkus</th><th>Tegevused</th></tr>
+              <tr><th>Kuupäev</th><th id="entriesActivityHeader" class="clickable-header">Tegevus</th><th>Kaal</th><th>Kordused</th><th>Märkus</th><th>Tegevused</th></tr>
             </thead>
             <tbody></tbody>
           </table>
@@ -139,8 +156,13 @@
         <label>Kaal (kg)</label>
         <input type="number" name="weight_kg" step="0.1" min="20" max="300" />
 
-        <label>Kätekõverdused</label>
+        <label>Kordused</label>
         <input type="number" name="pushups" min="0" max="300" />
+
+        <label>Tegevus</label>
+        <select name="activity_id" id="entryEditActivitySelect">
+          <option value="">-- Vali tegevus --</option>
+        </select>
 
         <label>Märkus</label>
         <textarea name="note" maxlength="300" rows="4"></textarea>
